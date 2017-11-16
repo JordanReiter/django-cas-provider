@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name='django-cas-provider',
-    version='0.3.5',
+    version='0.4.2',
     description='A "provider" for the Central Authentication Service (http://jasig.org/cas)',
     author='(Chris Williams), Sebastian Annies',
     author_email='(chris@nitron.org), sebastian.annies@googlemail.com',
@@ -17,7 +17,6 @@ setup(
     long_description=read('README.rst'),
     zip_safe=False,
     install_requires=['setuptools',
-                      'south>=0.7.2',
                       ],
     classifiers = [
         "Development Status :: 3 - Alpha",

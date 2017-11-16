@@ -7,6 +7,8 @@ from urllib import urlencode
 import urllib2
 import urlparse
 from functools import wraps
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from django.utils.decorators import available_attrs
 from django.views.decorators.debug import sensitive_post_parameters
@@ -23,11 +25,15 @@ from django.shortcuts import render_to_response
 from django.template import RequestContext
 from django.contrib.auth import authenticate
 from django.core.urlresolvers import reverse
+from django.db.models import ImageField
+from django.db.models.base import Model
+from django.db.models.fields import AutoField
+from django.db.models.fields.related import ForeignKey
 
 from lxml import etree
 from cas_provider.attribute_formatters import NSMAP, CAS
 from cas_provider.models import ProxyGrantingTicket, ProxyTicket
-from cas_provider.models import ServiceTicket
+from cas_provider.models import ServiceTicket, FailedLoginTracking
 
 from cas_provider.exceptions import SameEmailMismatchedPasswords
 from cas_provider.forms import LoginForm, MergeLoginForm
@@ -40,6 +46,7 @@ INVALID_TICKET = 'INVALID_TICKET'
 INVALID_SERVICE = 'INVALID_SERVICE'
 INVALID_REQUEST = 'INVALID_REQUEST'
 INTERNAL_ERROR = 'INTERNAL_ERROR'
+IGNORE_FIELDS = [AutoField, ForeignKey, ImageField]
 
 ERROR_MESSAGES = (
     (INVALID_TICKET, u'The provided ticket is invalid.'),
@@ -107,6 +114,23 @@ def login(request,
             form = LoginForm(request.POST, request=request)
 
         if form.is_valid():
+
+            failed_logins = FailedLoginTracking.objects.filter(
+                username=form.cleaned_data['email'],
+                login_attempt__gte=datetime.now() - timedelta(minutes=5)).count()
+
+            if failed_logins >= 4:
+                context['too_many_attempts'] = True
+                context['form'] = form
+                context.update(extra_context)
+
+                logging.debug('Rendering response on %s, merge is %s', template_name, merge)
+                return TemplateResponse(
+                    request,
+                    template_name,
+                    context
+                )
+
             service = form.cleaned_data.get('service', None)
             try:
                 auth_args = dict(username=form.cleaned_data['email'],
@@ -138,6 +162,7 @@ def login(request,
 
             if user is None:
                 errors.append('Incorrect username and/or password.')
+                FailedLoginTracking.objects.create(username=form.cleaned_data['email'])
             else:
                 if user.is_active:
                     auth_login(request, user)
@@ -369,7 +394,7 @@ def _cas2_proxy_success(pt):
 
 
 def _cas2_sucess_response(user, pgt=None, proxies=None):
-    return HttpResponse(auth_success_response(user, pgt, proxies), mimetype='text/xml')
+    return HttpResponse(auth_success_response(user, pgt, proxies), content_type='text/xml')
 
 
 def _cas2_error_response(code, message=None):
@@ -380,7 +405,7 @@ def _cas2_error_response(code, message=None):
         </cas:serviceResponse>''' % {
         'code': code,
         'message': message if message else dict(ERROR_MESSAGES).get(code)
-    }, mimetype='text/xml')
+    }, content_type='text/xml')
 
 
 def proxy_success(pt):
@@ -391,6 +416,65 @@ def proxy_success(pt):
     return unicode(etree.tostring(response, encoding='utf-8'), 'utf-8')
 
 
+def get_model_instance_attributes(instance):
+    """
+    Generic function to get all top level attributes of
+    a model instance and return in a dictionary, ignoring
+    any field types that are instance or DB dependant
+    """
+    if not issubclass(instance.__class__, Model):
+        raise TypeError('instance must be subclass of Model')
+
+    attributes = {}
+    for field in instance._meta.fields:
+        if field.__class__ not in IGNORE_FIELDS:
+            value = getattr(instance, field.name)
+            if value is not None:
+                try:
+                    if isinstance(value, unicode):
+                        new_val = str(value.encode('ascii', 'xmlcharrefreplace'))
+                    else:
+                        new_val = str(value).encode('ascii', 'xmlcharrefreplace')
+                    attributes[field.name] = new_val
+                except Exception as e:
+                    pass
+    return attributes
+
+
+def get_user_permissions(user):
+    '''
+    Returns permissions as a dictionary from
+    the set tags on the users profile, using
+    tag group as a site key to list of tags
+    representing auth groups on client sites
+    '''
+    permissions = defaultdict(str)
+    tags = user.tags.all()
+    if tags:
+        for tag in tags:
+            string = tag.slug
+            if len(permissions[tag.group.slug]):
+                string = "," + string
+            permissions[tag.group.slug] += string
+    return permissions
+
+
+def get_user_attributes(user, **kwargs):
+    """
+    Collect together all the user attributes
+    we want to send back to the client and
+    return in a dictionary
+    """
+    try:
+        attributes = {}
+        attributes.update(get_model_instance_attributes(user))
+        attributes.update(get_model_instance_attributes(user))
+        attributes.update(get_user_permissions(user))
+        return attributes
+    except:
+        logging.exception("Exception during CAS profile serialisation")
+
+
 def auth_success_response(user, pgt, proxies):
     response = etree.Element(CAS + 'serviceResponse', nsmap=NSMAP)
     auth_success = etree.SubElement(response, CAS + 'authenticationSuccess')
@@ -398,9 +482,7 @@ def auth_success_response(user, pgt, proxies):
     username.text = user.username
 
     attrs = {}
-    for receiver, custom in signals.cas_collect_custom_attributes.send(sender=auth_success_response, user=user):
-        if custom:
-            attrs.update(custom)
+    attrs.update(get_user_attributes(user))
 
     identifiers = [i for sr, rr in signals.on_cas_collect_histories.send(sender=validate, for_user=user)
                    for i in rr]
