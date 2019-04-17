@@ -170,7 +170,7 @@ def login(request,
         else:
             form = LoginForm(initial={'service': service})
 
-    if user is not None and user.is_authenticated():
+    if user is not None and user.is_authenticated:
         # We have an authenticated user.
         if not user.is_active:
             errors.append('This account is disabled.')
@@ -258,7 +258,7 @@ def validate(request):
 def logout(request, template_name='cas/logout.html',
            auto_redirect=settings.CAS_AUTO_REDIRECT_AFTER_LOGOUT):
     url = request.GET.get('url', None)
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         for ticket in ServiceTicket.objects.filter(user=request.user):
             ticket.delete()
         auth_logout(request)
