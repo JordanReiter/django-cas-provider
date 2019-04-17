@@ -1,5 +1,5 @@
 from django.contrib import admin
-from models import *
+from cas_provider.models import *
 
 
 class ServiceTicketAdmin(admin.ModelAdmin):

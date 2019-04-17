@@ -51,7 +51,12 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('ticket', models.CharField(max_length=32, verbose_name='ticket')),
                 ('created', models.DateTimeField(auto_now=True, verbose_name='created')),
-                ('proxyGrantingTicket', models.ForeignKey(verbose_name='Proxy Granting Ticket', to='cas_provider.ProxyGrantingTicket')),
+                ('proxyGrantingTicket', models.ForeignKey(
+                    verbose_name='Proxy Granting Ticket',
+                    to='cas_provider.ProxyGrantingTicket',
+                    on_delete=models.CASCADE
+                    )
+                ),
             ],
             options={
                 'verbose_name': 'Proxy Granting Ticket IOU',
@@ -74,7 +79,11 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ProxyTicket',
             fields=[
-                ('serviceticket_ptr', models.OneToOneField(parent_link=True, auto_created=True, primary_key=True, serialize=False, to='cas_provider.ServiceTicket')),
+                ('serviceticket_ptr', models.OneToOneField(
+                    parent_link=True, auto_created=True, primary_key=True, serialize=False,
+                    to='cas_provider.ServiceTicket',
+                    on_delete=models.CASCADE
+                )),
             ],
             options={
                 'verbose_name': 'Proxy Ticket',
@@ -85,16 +94,19 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='serviceticket',
             name='user',
-            field=models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='proxygrantingticket',
             name='serviceTicket',
-            field=models.ForeignKey(to='cas_provider.ServiceTicket', null=True),
+            field=models.ForeignKey(to='cas_provider.ServiceTicket', null=True, on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='proxyticket',
             name='proxyGrantingTicket',
-            field=models.ForeignKey(verbose_name='Proxy Granting Ticket', to='cas_provider.ProxyGrantingTicket'),
+            field=models.ForeignKey(
+                verbose_name='Proxy Granting Ticket', to='cas_provider.ProxyGrantingTicket',
+                on_delete=models.CASCADE
+            ),
         ),
     ]

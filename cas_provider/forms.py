@@ -1,10 +1,4 @@
 from django import forms
-from django.conf import settings
-from django.contrib.auth import authenticate
-from django.forms import ValidationError
-from django.utils.translation import ugettext_lazy as _
-from models import LoginTicket
-import datetime
 
 
 class LoginForm(forms.Form):

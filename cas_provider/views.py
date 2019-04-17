@@ -1,11 +1,11 @@
 import logging
 logger = logging.getLogger('cas_provider.views')
-import urllib
+
+from urllib.parse import urlencode, urlparse, parse_qsl, urlunsplit, urlsplit
+from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 
 import logging
-from urllib import urlencode
-import urllib2
-import urlparse
 from functools import wraps
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -14,17 +14,14 @@ from django.utils.decorators import available_attrs
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.cache import cache_control
 from django.utils.cache import patch_cache_control
-from django.views.decorators.csrf import csrf_protect, csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.conf import settings
 from django.contrib.auth import login as auth_login, logout as auth_logout
-from django.core.urlresolvers import get_callable
-from django.shortcuts import render_to_response
-from django.template import RequestContext
+from django.urls import get_callable, reverse
 from django.contrib.auth import authenticate
-from django.core.urlresolvers import reverse
 from django.db.models import ImageField
 from django.db.models.base import Model
 from django.db.models.fields import AutoField
@@ -154,7 +151,7 @@ def login(request,
                         )
                     if service is not None:
                         args['service'] = service
-                    args = urllib.urlencode(args)
+                    args = urlencode(args)
 
                     url = '%s?%s' % (base_url, args)
                     logging.debug('Redirecting to %s', url)
@@ -306,8 +303,8 @@ def ticket_validate(service, ticket_string, pgtUrl):
     except ServiceTicket.DoesNotExist:
         return _cas2_error_response(INVALID_TICKET)
 
-    ticketUrl = urlparse.urlparse(ticket.service)
-    serviceUrl = urlparse.urlparse(service)
+    ticketUrl = urlparse(ticket.service)
+    serviceUrl = urlparse(service)
 
     if not(ticketUrl.hostname == serviceUrl.hostname and ticketUrl.path == serviceUrl.path and ticketUrl.port == serviceUrl.port):
         return _cas2_error_response(INVALID_SERVICE)
@@ -358,7 +355,7 @@ def proxy_validate(request):
 
 def generate_proxy_granting_ticket(pgt_url, ticket):
     proxy_callback_good_status = (200, 202, 301, 302, 304)
-    uri = list(urlparse.urlsplit(pgt_url))
+    uri = list(urlsplit(pgt_url))
 
     pgt = ProxyGrantingTicket()
     pgt.serviceTicket = ticket
@@ -370,18 +367,18 @@ def generate_proxy_granting_ticket(pgt_url, ticket):
 
     params = {'pgtId': pgt.ticket, 'pgtIou': pgt.pgtiou}
 
-    query = dict(urlparse.parse_qsl(uri[4]))
+    query = dict(parse_qsl(uri[4]))
     query.update(params)
 
     uri[3] = urlencode(query)
 
     try:
-        response = urllib2.urlopen(urlparse.urlunsplit(uri))
-    except urllib2.HTTPError as e:
+        response = urlopen(urlunsplit(uri))
+    except HTTPError as e:
         if not e.code in proxy_callback_good_status:
             logger.debug('Checking Proxy Callback URL {} returned {}. Not issuing PGT.'.format(uri, e.code))
             return
-    except urllib2.URLError as e:
+    except URLError as e:
         logger.debug('Checking Proxy Callback URL {} raised URLError. Not issuing PGT.'.format(uri))
         return
 
@@ -413,7 +410,7 @@ def proxy_success(pt):
     proxySuccess = etree.SubElement(response, CAS + 'proxySuccess')
     proxyTicket = etree.SubElement(proxySuccess, CAS + 'proxyTicket')
     proxyTicket.text = pt
-    return unicode(etree.tostring(response, encoding='utf-8'), 'utf-8')
+    return str(etree.tostring(response, encoding='utf-8'), 'utf-8')
 
 
 def get_model_instance_attributes(instance):
@@ -431,7 +428,7 @@ def get_model_instance_attributes(instance):
             value = getattr(instance, field.name)
             if value is not None:
                 try:
-                    if isinstance(value, unicode):
+                    if isinstance(value, str):
                         new_val = str(value.encode('ascii', 'xmlcharrefreplace'))
                     else:
                         new_val = str(value).encode('ascii', 'xmlcharrefreplace')
@@ -505,4 +502,4 @@ def auth_success_response(user, pgt, proxies):
             proxyElement = etree.SubElement(proxiesElement, CAS + "proxy")
             proxyElement.text = proxy
 
-    return unicode(etree.tostring(response, encoding='utf-8'), 'utf-8')
+    return str(etree.tostring(response, encoding='utf-8'), 'utf-8')
