@@ -45,7 +45,7 @@ class ServiceTicket(BaseTicket):
         parsed = urlparse(self.service)
         query = parse_qs(parsed.query)
         query['ticket'] = [self.ticket]
-        query = [((k, v) if len(v) > 1 else (k, v[0])) for k, v in query.iteritems()]
+        query = [((k, v) if len(v) > 1 else (k, v[0])) for k, v in query.items()]
         parsed = ParseResult(scheme=parsed.scheme, netloc=parsed.netloc,
                               path=parsed.path, params=parsed.params,
                               query=urlencode(query), fragment=parsed.fragment
