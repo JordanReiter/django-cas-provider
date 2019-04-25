@@ -428,10 +428,7 @@ def get_model_instance_attributes(instance):
             value = getattr(instance, field.name)
             if value is not None:
                 try:
-                    if isinstance(value, str):
-                        new_val = str(value.encode('ascii', 'xmlcharrefreplace'))
-                    else:
-                        new_val = str(value).encode('ascii', 'xmlcharrefreplace')
+                    new_val = str(value)
                     attributes[field.name] = new_val
                 except Exception as e:
                     pass
