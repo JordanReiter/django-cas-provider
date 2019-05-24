@@ -19,21 +19,9 @@ class Command(BaseCommand):
     help = "Delete expired service tickets from the database"
 
     def handle(self, *args, **kwargs):
-        print("Service tickets:")
-        tickets = ServiceTicket.objects.all()
-        for ticket in tickets:
-            expiration = datetime.timedelta(minutes=settings.CAS_TICKET_EXPIRATION)
-            if datetime.datetime.now() > ticket.created + expiration:
-                print("Deleting %s..." % ticket.ticket)
-                ticket.delete()
-            else:
-                print("%s not expired..." % ticket.ticket)
-        tickets = LoginTicket.objects.all()
-        print("Login tickets:")
-        for ticket in tickets:
-            expiration = datetime.timedelta(minutes=settings.CAS_TICKET_EXPIRATION)
-            if datetime.datetime.now() > ticket.created + expiration:
-                print("Deleting %s..." % ticket.ticket)
-                ticket.delete()
-            else:
-                print("%s not expired..." % ticket.ticket)
+        expiration = datetime.timedelta(minutes=settings.CAS_TICKET_EXPIRATION)
+        created_before = datetime.datetime.now() - expiration
+        deleted, _ = ServiceTicket.objects.filter(created__lt=created_before).delete()
+        print("Deleted ", deleted, "Service Tickets")
+        deleted, _ = LoginTicket.objects.filter(created__lt=created_before).delete()
+        print("Deleted ", deleted, "Login Tickets")
